@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: hr-backend
+
+  datasource: # Database
+    url: jdbc:mysql://localhost:3306/hr_db
+    username: hr_user
+    password: Hr123@123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+jwt:
+  secret: myVeryLongSecretKeyThatIsAtLeast32CharactersLongForJWTSecurity
+  expiration: 86400
+server:
+  port: 8080
