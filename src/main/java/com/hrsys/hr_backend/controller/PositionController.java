@@ -1,12 +1,13 @@
 package com.hrsys.hr_backend.controller;
 
+import com.hrsys.hr_backend.dao.PositionDAO;
+import com.hrsys.hr_backend.dao.DepartmentDAO;
 import com.hrsys.hr_backend.entity.Position;
 import com.hrsys.hr_backend.entity.Department;
-import com.hrsys.hr_backend.repository.PositionRepository;
-import com.hrsys.hr_backend.repository.DepartmentRepository;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Optional;
@@ -17,19 +18,19 @@ import java.util.Optional;
 public class PositionController {
 
     @Autowired
-    private PositionRepository positionRepository;
+    private PositionDAO positionDAO;
 
     @Autowired
-    private DepartmentRepository departmentRepository;
+    private DepartmentDAO departmentDAO;
 
     @GetMapping
     public List<Position> getAllPositions() {
-        return positionRepository.findAll();
+        return positionDAO.findAll();
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Position> getPositionById(@PathVariable Long id) {
-        Optional<Position> position = positionRepository.findById(id);
+        Optional<Position> position = positionDAO.findById(id);
         if (position.isPresent()) {
             return ResponseEntity.ok(position.get());
         }
@@ -37,19 +38,24 @@ public class PositionController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN') or hasRole('HR_MANAGER')")
     public ResponseEntity<?> createPosition(@Valid @RequestBody PositionRequest positionRequest) {
         try {
+            if (positionDAO.existsByTitle(positionRequest.getTitle())) {
+                return ResponseEntity.badRequest().body(new MessageResponse("Position title already exists"));
+            }
+
             Position position = new Position();
             position.setTitle(positionRequest.getTitle());
             position.setDescription(positionRequest.getDescription());
 
             if (positionRequest.getDepartmentId() != null) {
-                Department department = departmentRepository.findById(positionRequest.getDepartmentId())
+                Department department = departmentDAO.findById(positionRequest.getDepartmentId())
                         .orElseThrow(() -> new RuntimeException("Department not found"));
                 position.setDepartment(department);
             }
 
-            Position savedPosition = positionRepository.save(position);
+            Position savedPosition = positionDAO.save(position);
             return ResponseEntity.ok(savedPosition);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
@@ -57,21 +63,27 @@ public class PositionController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('HR_MANAGER')")
     public ResponseEntity<?> updatePosition(@PathVariable Long id, @Valid @RequestBody PositionRequest positionRequest) {
         try {
-            Position position = positionRepository.findById(id)
+            Position position = positionDAO.findById(id)
                     .orElseThrow(() -> new RuntimeException("Position not found"));
+
+            Optional<Position> existingPosition = positionDAO.findByTitle(positionRequest.getTitle());
+            if (existingPosition.isPresent() && !existingPosition.get().getId().equals(id)) {
+                return ResponseEntity.badRequest().body(new MessageResponse("Position title already exists"));
+            }
 
             position.setTitle(positionRequest.getTitle());
             position.setDescription(positionRequest.getDescription());
 
             if (positionRequest.getDepartmentId() != null) {
-                Department department = departmentRepository.findById(positionRequest.getDepartmentId())
+                Department department = departmentDAO.findById(positionRequest.getDepartmentId())
                         .orElseThrow(() -> new RuntimeException("Department not found"));
                 position.setDepartment(department);
             }
 
-            Position updatedPosition = positionRepository.save(position);
+            Position updatedPosition = positionDAO.save(position);
             return ResponseEntity.ok(updatedPosition);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
@@ -79,12 +91,13 @@ public class PositionController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('HR_MANAGER')")
     public ResponseEntity<?> deletePosition(@PathVariable Long id) {
         try {
-            Position position = positionRepository.findById(id)
+            Position position = positionDAO.findById(id)
                     .orElseThrow(() -> new RuntimeException("Position not found"));
 
-            positionRepository.delete(position);
+            positionDAO.deleteById(id);
             return ResponseEntity.ok(new MessageResponse("Position deleted successfully"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
@@ -93,7 +106,22 @@ public class PositionController {
 
     @GetMapping("/department/{departmentId}")
     public List<Position> getPositionsByDepartment(@PathVariable Long departmentId) {
-        return positionRepository.findByDepartmentId(departmentId);
+        return positionDAO.findByDepartmentId(departmentId);
+    }
+
+    @GetMapping("/department/name/{departmentName}")
+    public List<Position> getPositionsByDepartmentName(@PathVariable String departmentName) {
+        return positionDAO.findByDepartmentName(departmentName);
+    }
+
+    @GetMapping("/search")
+    public List<Position> searchPositions(@RequestParam String title) {
+        return positionDAO.findByTitleContaining(title);
+    }
+
+    @GetMapping("/with-employees")
+    public List<Position> getPositionsWithEmployees() {
+        return positionDAO.findPositionsWithEmployees();
     }
 
     public static class PositionRequest {

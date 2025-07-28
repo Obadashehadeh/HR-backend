@@ -1,5 +1,6 @@
 package com.hrsys.hr_backend.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
@@ -22,6 +23,7 @@ public class Department {
     private String managerName;
 
     @OneToMany(mappedBy = "department", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Employee> employees;
 
     public Department() {}

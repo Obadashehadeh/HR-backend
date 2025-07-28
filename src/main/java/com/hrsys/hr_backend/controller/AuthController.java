@@ -3,6 +3,7 @@ package com.hrsys.hr_backend.controller;
 import com.hrsys.hr_backend.dto.JwtResponse;
 import com.hrsys.hr_backend.dto.LoginRequest;
 import com.hrsys.hr_backend.dto.RegisterRequest;
+import com.hrsys.hr_backend.entity.Role;
 import com.hrsys.hr_backend.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,26 @@ public class AuthController {
             JwtResponse jwtResponse = authService.login(loginRequest);
             return ResponseEntity.ok(jwtResponse);
         } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+        }
+    }
+
+    @PostMapping("/promote/{username}")
+    public ResponseEntity<?> promoteUser(@PathVariable String username) {
+        try {
+            String message = authService.promoteUser(username, Role.ADMIN);
+            return ResponseEntity.ok(new MessageResponse(message));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+        }
+    }
+
+    @PostMapping("/promote/{username}/hr")
+    public ResponseEntity<?> promoteUserToHR(@PathVariable String username) {
+        try {
+            String message = authService.promoteUser(username, Role.HR_MANAGER);
+            return ResponseEntity.ok(new MessageResponse(message));
+        } catch (Exception e) {
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
         }
     }

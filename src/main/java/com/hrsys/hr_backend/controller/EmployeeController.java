@@ -1,14 +1,15 @@
 package com.hrsys.hr_backend.controller;
 
+import com.hrsys.hr_backend.dao.EmployeeDAO;
+import com.hrsys.hr_backend.dao.DepartmentDAO;
+import com.hrsys.hr_backend.dao.PositionDAO;
 import com.hrsys.hr_backend.entity.Employee;
 import com.hrsys.hr_backend.entity.Department;
 import com.hrsys.hr_backend.entity.Position;
-import com.hrsys.hr_backend.repository.EmployeeRepository;
-import com.hrsys.hr_backend.repository.DepartmentRepository;
-import com.hrsys.hr_backend.repository.PositionRepository;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -21,22 +22,22 @@ import java.util.Optional;
 public class EmployeeController {
 
     @Autowired
-    private EmployeeRepository employeeRepository;
+    private EmployeeDAO employeeDAO;
 
     @Autowired
-    private DepartmentRepository departmentRepository;
+    private DepartmentDAO departmentDAO;
 
     @Autowired
-    private PositionRepository positionRepository;
+    private PositionDAO positionDAO;
 
     @GetMapping
     public List<Employee> getAllEmployees() {
-        return employeeRepository.findAll();
+        return employeeDAO.findAll();
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Employee> getEmployeeById(@PathVariable Long id) {
-        Optional<Employee> employee = employeeRepository.findById(id);
+        Optional<Employee> employee = employeeDAO.findById(id);
         if (employee.isPresent()) {
             return ResponseEntity.ok(employee.get());
         }
@@ -44,6 +45,7 @@ public class EmployeeController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN') or hasRole('HR_MANAGER')")
     public ResponseEntity<?> createEmployee(@Valid @RequestBody EmployeeRequest employeeRequest) {
         try {
             Employee employee = new Employee();
@@ -55,18 +57,18 @@ public class EmployeeController {
             employee.setSalary(employeeRequest.getSalary());
 
             if (employeeRequest.getDepartmentId() != null) {
-                Department department = departmentRepository.findById(employeeRequest.getDepartmentId())
+                Department department = departmentDAO.findById(employeeRequest.getDepartmentId())
                         .orElseThrow(() -> new RuntimeException("Department not found"));
                 employee.setDepartment(department);
             }
 
             if (employeeRequest.getPositionId() != null) {
-                Position position = positionRepository.findById(employeeRequest.getPositionId())
+                Position position = positionDAO.findById(employeeRequest.getPositionId())
                         .orElseThrow(() -> new RuntimeException("Position not found"));
                 employee.setPosition(position);
             }
 
-            Employee savedEmployee = employeeRepository.save(employee);
+            Employee savedEmployee = employeeDAO.save(employee);
             return ResponseEntity.ok(savedEmployee);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
@@ -74,9 +76,10 @@ public class EmployeeController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('HR_MANAGER')")
     public ResponseEntity<?> updateEmployee(@PathVariable Long id, @Valid @RequestBody EmployeeRequest employeeRequest) {
         try {
-            Employee employee = employeeRepository.findById(id)
+            Employee employee = employeeDAO.findById(id)
                     .orElseThrow(() -> new RuntimeException("Employee not found"));
 
             employee.setFirstName(employeeRequest.getFirstName());
@@ -87,18 +90,18 @@ public class EmployeeController {
             employee.setSalary(employeeRequest.getSalary());
 
             if (employeeRequest.getDepartmentId() != null) {
-                Department department = departmentRepository.findById(employeeRequest.getDepartmentId())
+                Department department = departmentDAO.findById(employeeRequest.getDepartmentId())
                         .orElseThrow(() -> new RuntimeException("Department not found"));
                 employee.setDepartment(department);
             }
 
             if (employeeRequest.getPositionId() != null) {
-                Position position = positionRepository.findById(employeeRequest.getPositionId())
+                Position position = positionDAO.findById(employeeRequest.getPositionId())
                         .orElseThrow(() -> new RuntimeException("Position not found"));
                 employee.setPosition(position);
             }
 
-            Employee updatedEmployee = employeeRepository.save(employee);
+            Employee updatedEmployee = employeeDAO.save(employee);
             return ResponseEntity.ok(updatedEmployee);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
@@ -106,12 +109,13 @@ public class EmployeeController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('HR_MANAGER')")
     public ResponseEntity<?> deleteEmployee(@PathVariable Long id) {
         try {
-            Employee employee = employeeRepository.findById(id)
+            Employee employee = employeeDAO.findById(id)
                     .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-            employeeRepository.delete(employee);
+            employeeDAO.deleteById(id);
             return ResponseEntity.ok(new MessageResponse("Employee deleted successfully"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
@@ -120,17 +124,30 @@ public class EmployeeController {
 
     @GetMapping("/department/{departmentId}")
     public List<Employee> getEmployeesByDepartment(@PathVariable Long departmentId) {
-        return employeeRepository.findByDepartmentId(departmentId);
+        return employeeDAO.findByDepartmentId(departmentId);
     }
 
     @GetMapping("/search")
     public List<Employee> searchEmployees(@RequestParam String name) {
-        return employeeRepository.findByFirstNameContainingOrLastNameContaining(name, name);
+        return employeeDAO.findByFirstNameContainingOrLastNameContaining(name, name);
     }
 
     @GetMapping("/salary/above/{amount}")
     public List<Employee> getEmployeesWithSalaryAbove(@PathVariable BigDecimal amount) {
-        return employeeRepository.findBySalaryGreaterThan(amount);
+        return employeeDAO.findBySalaryGreaterThan(amount);
+    }
+
+    @GetMapping("/statistics/department/{departmentId}")
+    public ResponseEntity<?> getDepartmentStatistics(@PathVariable Long departmentId) {
+        try {
+            Long employeeCount = employeeDAO.countEmployeesByDepartment(departmentId);
+            BigDecimal avgSalary = employeeDAO.findAverageSalaryByDepartment(departmentId);
+
+            DepartmentStatsResponse stats = new DepartmentStatsResponse(employeeCount, avgSalary);
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+        }
     }
 
     public static class EmployeeRequest {
@@ -174,5 +191,21 @@ public class EmployeeController {
         public MessageResponse(String message) { this.message = message; }
         public String getMessage() { return message; }
         public void setMessage(String message) { this.message = message; }
+    }
+
+    public static class DepartmentStatsResponse {
+        private Long employeeCount;
+        private BigDecimal avgSalary;
+
+        public DepartmentStatsResponse(Long employeeCount, BigDecimal avgSalary) {
+            this.employeeCount = employeeCount;
+            this.avgSalary = avgSalary;
+        }
+
+        public Long getEmployeeCount() { return employeeCount; }
+        public void setEmployeeCount(Long employeeCount) { this.employeeCount = employeeCount; }
+
+        public BigDecimal getAvgSalary() { return avgSalary; }
+        public void setAvgSalary(BigDecimal avgSalary) { this.avgSalary = avgSalary; }
     }
 }
